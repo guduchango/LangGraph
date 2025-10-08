@@ -1,50 +1,39 @@
 from langgraph.graph import MessagesState, StateGraph, START, END
 from langchain_core.messages import HumanMessage, AIMessage
+import random
 
-# Estado que hereda de MessagesState para tener historial automático
+# Simulación de init_chat_model para que sea ejecutable
+# En tu caso, usa tu import original: from langchain.chat_models import init_chat_model
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain.chat_models import init_chat_model
+
+
+# Configuración del LLM (reemplaza con tu init_chat_model)
+llm = init_chat_model("gemini-2.0-flash-001", temperature=0)
 class State(MessagesState):
-    contador_interacciones: int = 0
+    customer_name: str
+    my_age: int
 
 
-def chatbot_node(state: State):
-    """
-    Este nodo demuestra cómo trabajar con el historial de mensajes.
-    MessagesState mantiene automáticamente una lista de mensajes en state["messages"]
-    """
-    
-    # Acceder al historial completo
-    historial = state["messages"]
-    
-    # Obtener el último mensaje del usuario
-    ultimo_mensaje = historial[-1] if historial else None
-    
-    # Contar interacciones
-    nuevo_contador = state.get("contador_interacciones", 0) + 1
-    
-    # Crear respuesta basada en el historial
-    if nuevo_contador == 1:
-        respuesta = AIMessage(content="¡Hola! Soy tu asistente. ¿En qué puedo ayudarte?")
-    elif nuevo_contador == 2:
-        respuesta = AIMessage(
-            content=f"Veo que dijiste: '{ultimo_mensaje.content}'. ¿Algo más?"
-        )
+def node_1(state: State):
+    new_state: State = {}
+    if state.get("customer_name") is None:
+        new_state["customer_name"] = "John Doe"
     else:
-        num_mensajes = len(historial)
-        respuesta = AIMessage(
-            content=f"Llevamos {num_mensajes} mensajes en total. El historial se mantiene automáticamente."
-        )
-    
-    # Retornar el nuevo mensaje (se agrega automáticamente al historial)
-    return {
-        "messages": [respuesta],
-        "contador_interacciones": nuevo_contador
-    }
+        new_state["my_age"] = random.randint(20, 30)
 
+    history = state["messages"]
+    ai_message = llm.invoke(history)
+    new_state["messages"] = [ai_message]
+    return new_state
 
-# Construir el grafo
+from langgraph.graph import StateGraph, START, END
+
 builder = StateGraph(State)
-builder.add_node("chatbot", chatbot_node)
-builder.add_edge(START, "chatbot")
-builder.add_edge("chatbot", END)
+builder.add_node("node_1", node_1)
+
+builder.add_edge(START, 'node_1')
+builder.add_edge('node_1', END)
 
 agent = builder.compile()
